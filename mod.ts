@@ -247,7 +247,7 @@ const matchSepBy = <T, U>(
       nextState = separatorState;
     }
 
-    return updateParserResult(parserState, results);
+    return updateParserResult(nextState, results);
   };
 
 const sepBy = <T, U>(separatorParser: Parser<U, T>) =>
@@ -279,10 +279,13 @@ const between = <T>(
       rightParser,
     ]).map((result) => [result[1]]);
 
-const parser = sequenceOf([letters, str(":"), letters, str(";")]);
+const btwSB = between(str("["), str("]"));
+const commaSep = sepBy(str(","));
+
+const parser = btwSB(commaSep(choice([digits, letters])));
 
 console.log(JSON.stringify(
-  parser.run("diceroll:putain;"),
+  parser.run("[123,abc,xd,]"),
   null,
   2,
 ));
