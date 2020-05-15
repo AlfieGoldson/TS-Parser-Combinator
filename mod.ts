@@ -12,20 +12,20 @@ type ParserTransformerFn<T, U> = (
   IParserState: IParserState<T>,
 ) => IParserState<U>;
 
-const updateParserState = <T>(
+const updateParserState = <T, U>(
   state: IParserState<T>,
   index: number,
-  result: ParserResult<T>,
-): IParserState<T> => ({
+  result: ParserResult<U>,
+): IParserState<U> => ({
   ...state,
   index,
   result,
 });
 
-const updateParserResult = <T>(
+const updateParserResult = <T, U>(
   state: IParserState<T>,
-  result: ParserResult<T>,
-): IParserState<T> => ({
+  result: ParserResult<U>,
+): IParserState<U> => ({
   ...state,
   result,
 });
@@ -60,12 +60,27 @@ class Parser<T, U> {
     return new Parser<T, V>((parserState: IParserState<T>) => {
       const nextState = this.parserStateTransformerFn(parserState);
 
-      if (nextState.isError) return { ...nextState, result: [] };
+      if (nextState.isError) {
+        return updateParserResult<U, V>(nextState, []);
+      }
 
-      return updateParserResult<V>(
-        { ...nextState, result: [] },
+      return updateParserResult(
+        nextState,
         fn(nextState.result),
       );
+    });
+  }
+
+  chain<V>(fn: (result: ParserResult<U>) => Parser<U, V>): Parser<T, V> {
+    return new Parser<T, V>((parserState: IParserState<T>) => {
+      const nextState = this.parserStateTransformerFn(parserState);
+
+      if (nextState.isError) {
+        updateParserResult<U, V>(nextState, []);
+      }
+
+      const nextParser = fn(nextState.result);
+      return nextParser.parserStateTransformerFn(nextState);
     });
   }
 
@@ -128,7 +143,7 @@ const regexMatcher = (regex: RegExp) =>
     if (!regexMatch) {
       return updateParserError(
         parserState,
-        `str: Couldn't match letters at index ${index}`,
+        `regex: Couldn't match regex at index ${index}`,
       );
     }
 
@@ -145,12 +160,9 @@ const digits = regexMatcher(/^[0-9]+/);
 // Transform this to be recursive to accept multiple types
 const sequenceOf = <T>(parsers: Parser<T, T>[]): Parser<T, T> =>
   new Parser<T, T>((parserState: IParserState<T>) => {
-    if (parserState.isError) return { ...parserState, result: [] };
+    if (parserState.isError) return parserState;
     const results: ParserResult<T> = [];
-    let nextState: IParserState<T> = {
-      ...parserState,
-      result: [],
-    };
+    let nextState = parserState;
 
     for (let p of parsers) {
       nextState = p.parserStateTransformerFn(nextState);
@@ -162,7 +174,9 @@ const sequenceOf = <T>(parsers: Parser<T, T>[]): Parser<T, T> =>
 
 const choice = <T, U>(parsers: Parser<T, U>[]): Parser<T, U> =>
   new Parser<T, U>((parserState: IParserState<T>) => {
-    if (parserState.isError) return { ...parserState, result: [] };
+    if (parserState.isError) {
+      return updateParserResult<T, U>(parserState, []);
+    }
 
     for (let p of parsers) {
       const nextState = p.parserStateTransformerFn(parserState);
@@ -172,32 +186,32 @@ const choice = <T, U>(parsers: Parser<T, U>[]): Parser<T, U> =>
     }
 
     return updateParserError<U>(
-      { ...parserState, result: [] },
+      updateParserResult<T, U>(parserState, []),
       `choice: Unable to match with any parser at index ${parserState.index}`,
     );
   });
 
-const matchMany = <T>(parser: Parser<T, T>) =>
-  (parserState: IParserState<T>): IParserState<T> => {
-    if (parserState.isError) return parserState;
+const matchMany = <T, U>(parser: Parser<T, U>) =>
+  (parserState: IParserState<T>): IParserState<U> => {
+    if (parserState.isError) return updateParserResult<T, U>(parserState, []);
 
     let nextState = parserState;
-    const results: ParserResult<T> = [];
+    const results: ParserResult<U> = [];
 
     while (true) {
       const testState = parser.parserStateTransformerFn(nextState);
 
       if (testState.isError) break;
 
-      nextState = testState;
-      results.push(nextState.result);
+      results.push(testState.result);
+      nextState = updateParserResult<U, T>(testState, []);
     }
     return updateParserResult(nextState, results);
   };
 
-const many = <T>(parser: Parser<T, T>) => new Parser(matchMany(parser));
+const many = <T, U>(parser: Parser<T, U>) => new Parser(matchMany(parser));
 
-const many1 = <T>(parser: Parser<T, T>) =>
+const many1 = <T, U>(parser: Parser<T, U>) =>
   new Parser((parserState: IParserState<T>) => {
     const nextState = matchMany(parser)(parserState);
     if (nextState.result.length <= 0) {
@@ -210,6 +224,50 @@ const many1 = <T>(parser: Parser<T, T>) =>
     return nextState;
   });
 
+const matchSepBy = <T, U>(
+  separatorParser: Parser<U, T>,
+  valueParser: Parser<T, U>,
+) =>
+  (parserState: IParserState<T>) => {
+    const results: ParserResult<U> = [];
+    let nextState = parserState;
+
+    while (true) {
+      const thingWeWantState = valueParser.parserStateTransformerFn(
+        nextState,
+      );
+      if (thingWeWantState.isError) break;
+      results.push(thingWeWantState.result);
+
+      const separatorState = separatorParser.parserStateTransformerFn(
+        thingWeWantState,
+      );
+
+      if (separatorState.isError) break;
+      nextState = separatorState;
+    }
+
+    return updateParserResult(parserState, results);
+  };
+
+const sepBy = <T, U>(separatorParser: Parser<U, T>) =>
+  (valueParser: Parser<T, U>) =>
+    new Parser<T, U>(matchSepBy(separatorParser, valueParser));
+
+const sepBy1 = <T, U>(separatorParser: Parser<U, T>) =>
+  (valueParser: Parser<T, U>) =>
+    new Parser<T, U>((parserState: IParserState<T>) => {
+      const nextState = matchSepBy(separatorParser, valueParser)(parserState);
+      if (nextState.result.length <= 0) {
+        return updateParserError(
+          nextState,
+          `sepBy1: Unable to match any input using parser @ index ${nextState.index}`,
+        );
+      }
+
+      return nextState;
+    });
+
 const between = <T>(
   leftParser: Parser<T, T>,
   rightParser: Parser<T, T>,
@@ -221,12 +279,10 @@ const between = <T>(
       rightParser,
     ]).map((result) => [result[1]]);
 
-const parser = between(str("("), str(")"))(
-  many(choice([letters, digits])).map((result) => [result.join("")]),
-);
+const parser = sequenceOf([letters, str(":"), letters, str(";")]);
 
 console.log(JSON.stringify(
-  parser.run("(awecho123xd)"),
+  parser.run("diceroll:putain;"),
   null,
   2,
 ));
