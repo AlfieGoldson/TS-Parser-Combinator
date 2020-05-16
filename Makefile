@@ -1,2 +1,2 @@
-run:
-	deno run mod.ts
+arrayOfArrays:
+	deno run ./examples/arrayOfArrays/main.ts
