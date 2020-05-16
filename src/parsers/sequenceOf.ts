@@ -6,18 +6,21 @@ import {
   clearParserResult,
 } from "../Parser.ts";
 
-export const sequenceOf = <T, U>(parsers: Parser<T, U>[]): Parser<T, U> =>
-  new Parser<T, U>((parserState: IParserState<T>) => {
-    if (parserState.isError) return clearParserResult<T, U>(parserState);
-    const results: ParserResult<U> = [];
-    let nextState = clearParserResult<T, U>(parserState);
+export const sequenceOf = <T>(
+  parsers: Parser<any, any>[],
+): Parser<any, T> =>
+  new Parser<any, T>((parserState: IParserState<any>) => {
+    if (parserState.isError) {
+      return parserState;
+    }
+    const results: T[] = [];
+    let nextState = parserState;
 
     for (let p of parsers) {
-      nextState = p.parserStateTransformerFn(
-        clearParserResult<U, T>(nextState),
-      );
-      results.push(nextState.result);
+      nextState = p.parserStateTransformerFn(nextState);
+
+      results.push(nextState.result as T);
     }
 
-    return updateParserResult(nextState, results);
+    return updateParserResult<any, T>(nextState, results);
   });
