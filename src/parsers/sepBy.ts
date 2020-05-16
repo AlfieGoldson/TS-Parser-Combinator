@@ -6,40 +6,39 @@ import {
   ParserResult,
 } from "../Parser.ts";
 
-const matchSepBy = <T, U>(
-  separatorParser: Parser<U, T>,
-  valueParser: Parser<T, U>,
-) =>
-  (parserState: IParserState<T>) => {
-    const results: ParserResult<U> = [];
-    let nextState = parserState;
+const matchSepBy = <V, W>(separatorParser: Parser<V, W>) =>
+  <T, U>(valueParser: Parser<T, U>) =>
+    (parserState: IParserState<T>) => {
+      const results: ParserResult<U> = [];
+      let nextState = parserState;
 
-    while (true) {
-      const thingWeWantState = valueParser.parserStateTransformerFn(
-        nextState,
-      );
-      if (thingWeWantState.isError) break;
-      results.push(thingWeWantState.result);
-      nextState = updateParserResult<U, T>(thingWeWantState, []);
-      const separatorState = separatorParser.parserStateTransformerFn(
-        thingWeWantState,
-      );
+      while (true) {
+        const thingWeWantState = valueParser.parserStateTransformerFn(
+          nextState,
+        );
+        if (thingWeWantState.isError) break;
+        results.push(thingWeWantState.result);
 
-      if (separatorState.isError) break;
-      nextState = separatorState;
-    }
+        nextState = updateParserResult<U, T>(thingWeWantState, []);
+        const separatorState = separatorParser.parserStateTransformerFn(
+          updateParserResult<U, V>(thingWeWantState, []),
+        );
 
-    return updateParserResult(nextState, results);
-  };
+        if (separatorState.isError) break;
+        nextState = updateParserResult<W, T>(separatorState, []);
+      }
 
-export const sepBy = <T, U>(separatorParser: Parser<U, T>) =>
-  (valueParser: Parser<T, U>) =>
-    new Parser<T, U>(matchSepBy(separatorParser, valueParser));
+      return updateParserResult(nextState, results);
+    };
 
-export const sepBy1 = <T, U>(separatorParser: Parser<U, T>) =>
-  (valueParser: Parser<T, U>) =>
+export const sepBy = <V, W>(separatorParser: Parser<V, W>) =>
+  <T, U>(valueParser: Parser<T, U>) =>
+    new Parser<T, U>(matchSepBy(separatorParser)(valueParser));
+
+export const sepBy1 = <V, W>(separatorParser: Parser<V, W>) =>
+  <T, U>(valueParser: Parser<T, U>) =>
     new Parser<T, U>((parserState: IParserState<T>) => {
-      const nextState = matchSepBy(separatorParser, valueParser)(parserState);
+      const nextState = matchSepBy(separatorParser)(valueParser)(parserState);
       if (!(nextState.result instanceof Array)) {
         return updateParserError(
           nextState,
