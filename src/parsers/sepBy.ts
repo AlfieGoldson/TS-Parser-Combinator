@@ -4,6 +4,7 @@ import {
   updateParserResult,
   IParserState,
   ParserResult,
+  clearParserResult,
 } from "../Parser.ts";
 
 const matchSepBy = <V, W>(separatorParser: Parser<V, W>) =>
@@ -19,13 +20,13 @@ const matchSepBy = <V, W>(separatorParser: Parser<V, W>) =>
         if (thingWeWantState.isError) break;
         results.push(thingWeWantState.result);
 
-        nextState = updateParserResult<U, T>(thingWeWantState, []);
+        nextState = clearParserResult<U, T>(thingWeWantState);
         const separatorState = separatorParser.parserStateTransformerFn(
-          updateParserResult<U, V>(thingWeWantState, []),
+          clearParserResult<U, V>(thingWeWantState),
         );
 
         if (separatorState.isError) break;
-        nextState = updateParserResult<W, T>(separatorState, []);
+        nextState = clearParserResult<W, T>(separatorState);
       }
 
       return updateParserResult(nextState, results);

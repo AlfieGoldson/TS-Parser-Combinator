@@ -30,6 +30,11 @@ export const updateParserResult = <T, U>(
   result,
 });
 
+export const clearParserResult = <T, U>(state: IParserState<T>) => ({
+  ...state,
+  result: [],
+} as IParserState<U>);
+
 export const updateParserError = <T>(
   state: IParserState<T>,
   errorMsg: string,
@@ -61,7 +66,7 @@ export class Parser<T, U> {
       const nextState = this.parserStateTransformerFn(parserState);
 
       if (nextState.isError) {
-        return updateParserResult<U, V>(nextState, []);
+        return clearParserResult<U, V>(nextState);
       }
 
       return updateParserResult(
@@ -76,7 +81,7 @@ export class Parser<T, U> {
       const nextState = this.parserStateTransformerFn(parserState);
 
       if (nextState.isError) {
-        updateParserResult<U, V>(nextState, []);
+        clearParserResult<U, V>(nextState);
       }
 
       const nextParser = fn(nextState.result);

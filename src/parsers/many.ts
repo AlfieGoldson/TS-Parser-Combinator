@@ -4,11 +4,12 @@ import {
   updateParserResult,
   IParserState,
   ParserResult,
+  clearParserResult,
 } from "../Parser.ts";
 
 const matchMany = <T, U>(parser: Parser<T, U>) =>
   (parserState: IParserState<T>): IParserState<U> => {
-    if (parserState.isError) return updateParserResult<T, U>(parserState, []);
+    if (parserState.isError) return clearParserResult<T, U>(parserState);
 
     let nextState = parserState;
     const results: ParserResult<U> = [];
@@ -19,7 +20,7 @@ const matchMany = <T, U>(parser: Parser<T, U>) =>
       if (testState.isError) break;
 
       results.push(testState.result);
-      nextState = updateParserResult<U, T>(testState, []);
+      nextState = clearParserResult<U, T>(testState);
     }
     return updateParserResult(nextState, results);
   };

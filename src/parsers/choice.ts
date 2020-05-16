@@ -1,9 +1,13 @@
-import { Parser, updateParserError, updateParserResult } from "../Parser.ts";
+import {
+  Parser,
+  updateParserError,
+  clearParserResult,
+} from "../Parser.ts";
 
 export const choice = <T, U>(parsers: Parser<T, U>[]) =>
   new Parser<T, U>((parserState) => {
     if (parserState.isError) {
-      return updateParserResult<T, U>(parserState, []);
+      return clearParserResult<T, U>(parserState);
     }
 
     for (let p of parsers) {
@@ -12,7 +16,7 @@ export const choice = <T, U>(parsers: Parser<T, U>[]) =>
     }
 
     return updateParserError<U>(
-      updateParserResult<T, U>(parserState, []),
+      clearParserResult<T, U>(parserState),
       `choice: Unable to match with any parser at index ${parserState.index}`,
     );
   });
