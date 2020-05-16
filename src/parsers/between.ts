@@ -2,8 +2,8 @@ import { Parser } from "../Parser.ts";
 import { sequenceOf } from "./sequenceOf.ts";
 
 export const between = (
-  leftParser: Parser<unknown, unknown>,
-  rightParser: Parser<unknown, unknown>,
+  leftParser: Parser<any, any>,
+  rightParser: Parser<any, any>,
 ) =>
   <T, U>(contentParser: Parser<T, U>): Parser<T, U> =>
     sequenceOf([
