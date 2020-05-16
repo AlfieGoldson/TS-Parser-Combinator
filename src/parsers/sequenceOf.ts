@@ -3,17 +3,19 @@ import {
   updateParserResult,
   IParserState,
   ParserResult,
+  clearParserResult,
 } from "../Parser.ts";
 
-// Transform this to be recursive to accept multiple types
-export const sequenceOf = <T>(parsers: Parser<T, T>[]): Parser<T, T> =>
-  new Parser<T, T>((parserState: IParserState<T>) => {
-    if (parserState.isError) return parserState;
-    const results: ParserResult<T> = [];
-    let nextState = parserState;
+export const sequenceOf = <T, U>(parsers: Parser<T, U>[]): Parser<T, U> =>
+  new Parser<T, U>((parserState: IParserState<T>) => {
+    if (parserState.isError) return clearParserResult<T, U>(parserState);
+    const results: ParserResult<U> = [];
+    let nextState = clearParserResult<T, U>(parserState);
 
     for (let p of parsers) {
-      nextState = p.parserStateTransformerFn(nextState);
+      nextState = p.parserStateTransformerFn(
+        clearParserResult<U, T>(nextState),
+      );
       results.push(nextState.result);
     }
 
