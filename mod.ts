@@ -1,4 +1,4 @@
-type ParserResult<T> = (T | ParserResult<T>)[];
+type ParserResult<T> = T | ParserResult<T>[];
 
 interface IParserState<T> {
   targetString: string;
@@ -121,7 +121,7 @@ const str = (s: string) =>
     return updateParserState(
       parserState,
       index + s.length,
-      [s],
+      s,
     );
   });
 
@@ -150,7 +150,7 @@ const regexMatcher = (regex: RegExp) =>
     return updateParserState(
       parserState,
       index + regexMatch[0].length,
-      [regexMatch[0]],
+      regexMatch[0],
     );
   });
 
@@ -180,9 +180,7 @@ const choice = <T, U>(parsers: Parser<T, U>[]): Parser<T, U> =>
 
     for (let p of parsers) {
       const nextState = p.parserStateTransformerFn(parserState);
-      if (!nextState.isError) {
-        return nextState;
-      }
+      if (!nextState.isError) return nextState;
     }
 
     return updateParserError<U>(
@@ -214,6 +212,12 @@ const many = <T, U>(parser: Parser<T, U>) => new Parser(matchMany(parser));
 const many1 = <T, U>(parser: Parser<T, U>) =>
   new Parser((parserState: IParserState<T>) => {
     const nextState = matchMany(parser)(parserState);
+    if (!(nextState.result instanceof Array)) {
+      return updateParserError(
+        nextState,
+        `many1: 500`,
+      );
+    }
     if (nextState.result.length <= 0) {
       return updateParserError(
         nextState,
@@ -238,7 +242,7 @@ const matchSepBy = <T, U>(
       );
       if (thingWeWantState.isError) break;
       results.push(thingWeWantState.result);
-
+      nextState = updateParserResult<U, T>(thingWeWantState, []);
       const separatorState = separatorParser.parserStateTransformerFn(
         thingWeWantState,
       );
@@ -258,6 +262,12 @@ const sepBy1 = <T, U>(separatorParser: Parser<U, T>) =>
   (valueParser: Parser<T, U>) =>
     new Parser<T, U>((parserState: IParserState<T>) => {
       const nextState = matchSepBy(separatorParser, valueParser)(parserState);
+      if (!(nextState.result instanceof Array)) {
+        return updateParserError(
+          nextState,
+          `many1: 500`,
+        );
+      }
       if (nextState.result.length <= 0) {
         return updateParserError(
           nextState,
@@ -277,15 +287,25 @@ const between = <T>(
       leftParser,
       contentParser,
       rightParser,
-    ]).map((result) => [result[1]]);
+    ]).map((result) => {
+      if (!(result instanceof Array)) return result;
+      return result[1];
+    });
+
+const lazy = <T, U>(parserThunk: () => Parser<T, U>) =>
+  new Parser((parserState: IParserState<T>) => {
+    const parser = parserThunk();
+    return parser.parserStateTransformerFn(parserState);
+  });
 
 const btwSB = between(str("["), str("]"));
 const commaSep = sepBy(str(","));
 
-const parser = btwSB(commaSep(choice([digits, letters])));
+const value = lazy(() => choice([parser, letters, digits]));
+const parser = btwSB(commaSep(value));
 
 console.log(JSON.stringify(
-  parser.run("[123,abc,xd,]"),
+  parser.run("[1,[1,abc],xd,[awe,lol,2]]"),
   null,
   2,
 ));
